@@ -1,15 +1,22 @@
 {
   "scripts": {
-    "deps": "yarn install",
-    "watch": "shadow-cljs watch app;",
-    "release": "shadow-cljs release app;",
-    "server": "shadow-cljs server;",
+    "deps": "lein install",
+    "tailwind": "npx tailwindcss -i ./public/css/tailwind-input.css -o ./public/css/style.css --watch",
+    "shadow": "npx shadow-cljs watch app browser-test karma-test",
+    "ancient": "clojure -Sdeps '{:deps {com.github.liquidz/antq {:mvn/version \"RELEASE\"}}}' -m antq.core",
+    "compile": "shadow-cljs compile app",
+    "release": "npx shadow-cljs release app",
+    "build-report": "npx shadow-cljs run shadow.cljs.build-report app target/build-report.html",
     "clean": "rm -rf target; rm -rf public/js/compiled"
   },
   "dependencies": {
     "create-react-class": "^15.6.2",
+    "highlight.js": "11.5.1",
     "react": "^16.0.0",
     "react-dom": "^16.0.0",
     "shadow-cljs": "^2.0.80"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.3.3"
   }
 }
