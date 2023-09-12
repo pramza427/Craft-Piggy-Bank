@@ -25,6 +25,7 @@
       (when (> 10 minutes) "0") minutes
       ":"
       (when (> 10 seconds) "0") seconds)))
+
 (defn format-money [money]
   (str "$" (.toFixed (or money 0) 2)))
 
@@ -87,6 +88,14 @@
     (update-in db [:projects] dissoc name)))
 
 (rf/reg-event-db
+  ::delete-expense
+  (fn [db [_ idx]]
+    (let [expenses (into [] (get-in db [:projects (get db :current-project) :expenses]))]
+      (print expenses)
+      (assoc-in db [:projects (get db :current-project) :expenses]
+                (into (subvec expenses 0 idx) (subvec expenses (inc idx)))))))
+
+(rf/reg-event-db
   ::set-time
   (fn [db [_ val]]
     (assoc db ::current-time val)))
@@ -106,8 +115,6 @@
   :set-current-project
   (fn [db [_ val]]
     (assoc db :current-project val)))
-
-
 
 (rf/reg-event-db
   ::toggle-dark-mode
@@ -144,7 +151,7 @@
 
 (defn project-list-item [project]
   (let [current-project @(rf/subscribe [:current-project])]
-    [:div.py-2.border-b.cursor-pointer.rounded
+    [:div.py-2.border-b.cursor-pointer.rounded.group
      {:class (if (= current-project (:name project)) "bg-blue-100" "hover:bg-blue-50")
       :on-click #(rf/dispatch [:set-current-project (:name project)])}
      [:div.flex
@@ -152,21 +159,22 @@
       [:div.flex-grow]
       [:div.px-2 (format-time (:time project))]]
      [:div.flex
-      [:div.px-2.hover:bg-blue-200
-       {:on-click #(rf/dispatch [:dialog/open-edit-project-dialog (:name project)])}
-       [:i.fas.fa-edit]]
-      [:div.px-2.hover:bg-red-100
-       {:on-click #(when (js/confirm (str "Are you sure you want to delete " (:name project) "?"))
-                     (rf/dispatch [::delete-project (:name project)]))}
-       [:i.fas.fa-trash]]
+      [:div.px-2 (str (format-money (:rate project)) "/hr")]
       [:div.flex-grow]
-      [:div.px-2 (str (format-money (:rate project)) "/hr")]]]))
+      [:div.hidden.group-hover:flex
+       [:div.px-2.mx-1.rounded.hover:bg-blue-200
+        {:on-click #(rf/dispatch [:dialogs/open-edit-project-dialog (:name project)])}
+        [:i.fas.fa-edit]]
+       [:div.px-2.mx-1.rounded.hover:bg-red-200
+        {:on-click #(when (js/confirm (str "Are you sure you want to delete " (:name project) "?"))
+                      (rf/dispatch [::delete-project (:name project)]))}
+        [:i.fas.fa-trash]]]]]))
 
 (defn project-list []
   (let [projects @(rf/subscribe [:projects])]
     [:div.w-80.border-r.text-xl.flex.flex-col
      [:div.cursor-pointer.bg-teal-400.hover:bg-teal-500.text-center.p-1.mb-1.rounded.border-b.border-gray-300
-      {:on-click #(rf/dispatch [:dialog/add-project-dialog true])}
+      {:on-click #(rf/dispatch [:dialogs/open-add-project-dialog])}
       "Add Project"]
      (print "List: " projects)
      [:div.overflow-auto.p-2
@@ -183,6 +191,7 @@
         projects @(rf/subscribe [:projects])
         time (get-in projects [current-project :time])
         rate (get-in projects [current-project :rate])
+        earned (* rate (/ time 3600))
         counting @(rf/subscribe [::counting?])
         current-expenses @(rf/subscribe [::current-expenses])
         expense-total (reduce + (map :cost current-expenses))]
@@ -191,21 +200,30 @@
       [:div.text-6xl.text-center
        [:div.mt-10 current-project]
        [:div.my-5 (format-time time)]
-       [:div.border.border-gray-300.p-2.cursor-pointer.hover:bg-blue-50
-        {:on-click #(rf/dispatch [::set-counting (not counting)])}
-        (if counting "Stop" "Start")]
+       [:div.flex.justify-evenly
+        {:style {:width "40rem"}}
+        [:div.border.border-gray-300.p-2.cursor-pointer.hover:bg-blue-50
+         {:on-click #(rf/dispatch [:dialogs/open-add-time-dialog])}
+         "Add Time"]
+        [:div.border.border-gray-300.p-2.cursor-pointer.hover:bg-blue-50
+         {:on-click #(rf/dispatch [::set-counting (not counting)])}
+         (if counting "Stop" "Start")]]
        [:div.mt-10 "Piggy Bank:"]
-       [:div.my-5 (format-money (- (* rate (/ time 3600)) expense-total))]]
+       [:div.my-5 (format-money (- earned expense-total))]]
 
       :else
       [:div.text-6xl
        [:div "Select Project"]
-       [:div "<---"]]
-      )))
+       [:div "<---"]])))
 
 (defn expenses []
   (let [current-expenses @(rf/subscribe [::current-expenses])
-        current-project @(rf/subscribe [:current-project])]
+        total-expenses (reduce + (map :cost current-expenses))
+        current-project @(rf/subscribe [:current-project])
+        projects @(rf/subscribe [:projects])
+        hrs (/ (get-in projects [current-project :time]) 3600)
+        rate (get-in projects [current-project :rate])
+        earned (* rate hrs)]
     [:div.w-80.border-l.text-xl.flex.flex-col
      [:div.bg-red-300.text-center.p-1.mb-1.rounded.border-b.border-gray-300
       {:class (if (some? current-project)
@@ -213,21 +231,44 @@
                 "cursor-none")
        :on-click #(rf/dispatch [:dialogs/new-expense {}])}
       "Add Expense"]
-     [:div.overflow-auto.p-2
+     [:div.overflow-auto.m-1
       (cond
         (nil? current-project)
-        [:div "Expenses tied to projects. Select a project to see its expenses here."]
+        [:div "Expenses are tied to projects. Select a project to see its expenses here."]
 
-        (some? current-expenses)
-        (for [expenses current-expenses]
-          ^{:key (:name expenses)}
-          [:div.flex
-           [:div (:name expenses) ]
-           [:div.flex-grow]
-           [:div (format-money (:cost expenses))]])
+        (not-empty current-expenses)
+        (map-indexed (fn [idx expense]
+                       ^{:key idx}
+                       [:div.p-1.mb-1.flex.group.hover:bg-blue-50.rounded
+                        [:div (:name expense)]
+                        [:div.flex-grow]
+                        [:div.hidden.group-hover:flex
+                         [:div.px-2.mx-1.rounded.hover:bg-red-200.cursor-pointer
+                          {:on-click #(rf/dispatch [::delete-expense idx])}
+                          [:i.fas.fa-trash]]]
+                        [:div (format-money (:cost expense))]])
+                     current-expenses)
 
         :else
-        [:div "No expenses yet"])]]))
+        [:div "No expenses yet"])]
+     [:div.flex-grow]
+     (when (and (some? current-project) (not-empty current-expenses))
+       [:div.border-t
+        [:div.p-2
+         [:div.flex
+          [:div "Total earned"]
+          [:div.flex-grow]
+          [:div (format-money earned)]]
+         [:div.text-sm.text-gray-500 (str (.toFixed hrs 2) " hrs at $" (.toFixed rate 2) "/hr")]]
+        [:div.p-2.flex
+         [:div "Total expenses"]
+         [:div.flex-grow]
+         [:div (format-money total-expenses)]]
+        [:div.p-2.flex
+         [:div "Piggy Bank"]
+         [:div.flex-grow]
+         [:div (format-money (- earned total-expenses))]]])]))
+
 (defn main []
   [:div.flex.justify-between.min-h-full.relative.font-serif
    {:style {:height "100vh"}}
@@ -237,6 +278,7 @@
    [dialogs/add-project-dialog]
    [dialogs/edit-project-dialog]
    [dialogs/add-expense-dialog]
+   [dialogs/add-time-dialog]
    ])
 
 (defn start []

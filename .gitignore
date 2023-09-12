@@ -2,3 +2,5 @@
 /.shadow-cljs/
 /public/js/compiled/cljs-runtime
 /.idea/
+/.nrepl-port
+/target/
