@@ -42,7 +42,7 @@
                                                                        (* 3600 (:hours project))
                                                                        (* 60 (:minutes project))
                                                                        (:seconds project))))
-          (assoc-in [::add-project-dialog] false)))))
+          (dissoc ::new-project)))))
 
 (defn add-project-dialog []
   (let [new-project @(rf/subscribe [::new-project])]
