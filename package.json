@@ -10,6 +10,7 @@
     "clean": "rm -rf target; rm -rf public/js/compiled"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.33.2",
     "create-react-class": "^15.6.2",
     "highlight.js": "11.5.1",
     "react": "^16.0.0",
@@ -17,6 +18,7 @@
     "shadow-cljs": "^2.0.80"
   },
   "devDependencies": {
+    "supabase": "^1.93.0",
     "tailwindcss": "^3.3.3"
   }
 }

@@ -6,6 +6,7 @@
     [clojure.string :as str]
     [clojure.walk :refer [keywordize-keys]]
     [craft-piggy-bank.dialogs :as dialogs]
+    [craft-piggy-bank.user :as user]
     ))
 
 ;; ---------- Helpers ----------
@@ -36,19 +37,23 @@
                        (->>
                          (get db :projects) (vals)
                          (mapv (fn [e]
-                                 (select-keys e [:name :time :rate :expenses])))
+                                 (select-keys e [:id :t_name :i_time :f_rate :b_add_expenses :expenses])))
                          (clj->js)
                          (js/JSON.stringify)))))
 
 (rf/reg-event-db
   ::load-from-local
   (fn [db _]
-
     (let [projects (keywordize-keys (js->clj (js/JSON.parse (get-local-storage "projects"))))]
       (when (some? projects)
         (assoc db :projects (into {}
-                                  (map (fn [project] [(:name project) project])
+                                  (map (fn [project] [(:id project) project])
                                        projects)))))))
+
+(rf/reg-event-db
+  ::print-db
+  (fn [db _]
+    (print db)))
 
 ;; ---------- Subscriptions ----------
 (rf/reg-sub
@@ -60,6 +65,11 @@
   :current-project
   (fn [db _]
     (get db :current-project)))
+
+(rf/reg-sub
+  :current-project-data
+  (fn [db _]
+    (get-in db [:projects (get db :current-project)])))
 
 (rf/reg-sub
   :projects
@@ -76,25 +86,7 @@
   (fn [db _]
     (get db ::counting?)))
 
-(rf/reg-sub
-  ::current-user
-  (fn [db _]
-    (get db ::current-user)))
-
 ;; ---------- Events ----------
-(rf/reg-event-db
-  ::delete-project
-  (fn [db [_ name]]
-    (update-in db [:projects] dissoc name)))
-
-(rf/reg-event-db
-  ::delete-expense
-  (fn [db [_ idx]]
-    (let [expenses (into [] (get-in db [:projects (get db :current-project) :expenses]))]
-      (print expenses)
-      (assoc-in db [:projects (get db :current-project) :expenses]
-                (into (subvec expenses 0 idx) (subvec expenses (inc idx)))))))
-
 (rf/reg-event-db
   ::set-time
   (fn [db [_ val]]
@@ -103,8 +95,9 @@
 (rf/reg-event-db
   ::inc-time
   (fn [db _]
-    (let [current-project (get db :current-project)]
-      (assoc-in db [:projects current-project :time] (inc (get-in db [:projects current-project :time]))))))
+    (when (get db ::counting?)
+      (let [current-project (get db :current-project)]
+        (assoc-in db [:projects current-project :i_time] (inc (get-in db [:projects current-project :i_time])))))))
 
 (rf/reg-event-db
   ::set-counting
@@ -112,7 +105,7 @@
     (assoc db ::counting? val)))
 
 (rf/reg-event-db
-  :set-current-project
+  ::set-current-project
   (fn [db [_ val]]
     (assoc db :current-project val)))
 
@@ -133,102 +126,119 @@
         (.classList.add (js/document.getElementById "app") "dark")
         (assoc db ::dark-mode true)))))
 
-
-
 (defn save-load []
-  (let [user @(rf/subscribe [::current-user])]
-    [:div.border-t.p-2
+  (let [user @(rf/subscribe [:user/get-user])]
+    [:div.border-t.p-2.border-gray-300.dark:border-slate-900
      (if (some? user)
-       [:div (str "Hello " user)]
-       [:div.p-1.cursor-pointer.hover:bg-blue-50.text-center
-        {:on-click #(js/alert "NOT IMPLEMENTED. I'M SORRY!")} "Sign In"])
-     [:div.p-1.cursor-pointer.hover:bg-blue-50.text-center
-      {:on-click #(rf/dispatch [::save-to-local])}
-      "Save to local"]
-     [:div.p-1.cursor-pointer.hover:bg-blue-50.text-center
-      {:on-click #(rf/dispatch [::load-from-local])}
-      "Load from local"]]))
+       [:div
+        [:div.text-center.mb-5 (:email user)]
+        [:div.p-1.cursor-pointer.hover:bg-blue-50.text-center.rounded.dark:hover:bg-teal-950
+         {:on-click #(user/sign-out-submitted)}
+         "Sign Out"]]
+       [:div
+        [:div.p-1.cursor-pointer.hover:bg-blue-50.text-center.rounded.dark:hover:bg-teal-950
+         {:on-click #(rf/dispatch [:dialogs/open-sign-in-dialog])}
+         "Sign In"]
+        [:div.p-1.cursor-pointer.hover:bg-blue-50.text-center.rounded.dark:hover:bg-teal-950
+         {:on-click #(rf/dispatch [::save-to-local])}
+         "Save to local"]
+        [:div.p-1.cursor-pointer.hover:bg-blue-50.text-center.rounded.dark:hover:bg-teal-950
+         {:on-click #(rf/dispatch [::load-from-local])}
+         "Load from local"]])
+     ]))
 
 (defn project-list-item [project]
   (let [current-project @(rf/subscribe [:current-project])]
-    [:div.py-2.border-b.cursor-pointer.rounded.group
-     {:class (if (= current-project (:name project)) "bg-blue-100" "hover:bg-blue-50")
-      :on-click #(rf/dispatch [:set-current-project (:name project)])}
+    [:div.py-2.border-b.cursor-pointer.rounded.group.border-gray-300.dark:border-gray-800
+     {:class (if (= current-project (:id project)) "bg-blue-100 dark:bg-blue-900" "hover:bg-blue-50 dark:hover:bg-blue-950")
+      :on-click #(rf/dispatch [::set-current-project (:id project)])}
      [:div.flex
-      [:div.px-2 (:name project)]
+      [:div.px-2 (:t_name project)]
       [:div.flex-grow]
-      [:div.px-2 (format-time (:time project))]]
+      [:div.px-2 (format-time (:i_time project))]]
      [:div.flex
-      [:div.px-2 (str (format-money (:rate project)) "/hr")]
+      [:div.px-2 (str (format-money (:f_rate project)) "/hr")]
       [:div.flex-grow]
       [:div.hidden.group-hover:flex
-       [:div.px-2.mx-1.rounded.hover:bg-blue-200
-        {:on-click #(rf/dispatch [:dialogs/open-edit-project-dialog (:name project)])}
+       [:div.px-2.mx-1.rounded.hover:bg-blue-200.dark:hover:bg-purple-900
+        {:on-click #(rf/dispatch [:dialogs/open-edit-project-dialog (:id project)])}
         [:i.fas.fa-edit]]
-       [:div.px-2.mx-1.rounded.hover:bg-red-200
-        {:on-click #(when (js/confirm (str "Are you sure you want to delete " (:name project) "?"))
-                      (rf/dispatch [::delete-project (:name project)]))}
+       [:div.px-2.mx-1.rounded.hover:bg-red-200.dark:hover:bg-red-900
+        {:on-click (fn [e]
+                     (when (js/confirm (str "Are you sure you want to delete " (:t_name project) "?"))
+                       (.stopPropagation e)
+                       (rf/dispatch [:user/delete-db-project (:id project)])))}
         [:i.fas.fa-trash]]]]]))
 
 (defn project-list []
   (let [projects @(rf/subscribe [:projects])]
-    [:div.w-80.border-r.text-xl.flex.flex-col
-     [:div.cursor-pointer.bg-teal-400.hover:bg-teal-500.text-center.p-1.mb-1.rounded.border-b.border-gray-300
+    [:div.w-80.border-r.text-xl.flex.flex-col.m-2.rounded-lg.bg-white.border.border-gray-300.dark:border-slate-900.dark:bg-gray-950
+     [:div.p-1.m-2.cursor-pointer.bg-teal-400.hover:bg-teal-500.text-center.rounded.border.border-teal-500.dark:bg-teal-900.dark:border-teal-800.dark:hover:bg-teal-800
       {:on-click #(rf/dispatch [:dialogs/open-add-project-dialog])}
       "Add Project"]
-     (print "List: " projects)
      [:div.overflow-auto.p-2
-      (if (some? projects)
+      (if (not-empty projects)
         (for [[key project] projects]
           ^{:key key}
           [project-list-item project])
-        [:div "No projects to show"])]
+        [:div.text-gray-800.dark:text-gray-400 "No projects to show"])]
      [:div.flex-grow]
      [save-load]]))
 
 (defn project []
-  (let [current-project @(rf/subscribe [:current-project])
-        projects @(rf/subscribe [:projects])
-        time (get-in projects [current-project :time])
-        rate (get-in projects [current-project :rate])
+  (let [current-project-data @(rf/subscribe [:current-project-data])
+        name (get current-project-data :t_name)
+        time (get current-project-data :i_time)
+        rate (get current-project-data :f_rate)
         earned (* rate (/ time 3600))
         counting @(rf/subscribe [::counting?])
         current-expenses @(rf/subscribe [::current-expenses])
-        expense-total (reduce + (map :cost current-expenses))]
-    (cond
-      (some? current-project)
-      [:div.text-6xl.text-center
-       [:div.mt-10 current-project]
-       [:div.my-5 (format-time time)]
-       [:div.flex.justify-evenly
-        {:style {:width "40rem"}}
-        [:div.border.border-gray-300.p-2.cursor-pointer.hover:bg-blue-50
-         {:on-click #(rf/dispatch [:dialogs/open-add-time-dialog])}
-         "Add Time"]
-        [:div.border.border-gray-300.p-2.cursor-pointer.hover:bg-blue-50
-         {:on-click #(rf/dispatch [::set-counting (not counting)])}
-         (if counting "Stop" "Start")]]
-       [:div.mt-10 "Piggy Bank:"]
-       [:div.my-5 (format-money (- earned expense-total))]]
+        expense-total (reduce + (map :f_cost current-expenses))
+        dark-mode? @(rf/subscribe [::dark-mode?])]
+    [:div.flex.flex-col.flex-grow.text-6xl.text-center.relative.border.m-2.rounded-lg.bg-white.dark:bg-slate-950.dark:border-slate-800
+     [:div.absolute.top-5.right-5.cursor-pointer.text-xl
+      {:on-click #(rf/dispatch [::toggle-dark-mode])}
+      [:div.flex.flex-center.w-8.h-8.rounded-lg.hover:bg-blue-100.dark:hover:bg-violet-900
+       [:i.fas
+        {:class (if dark-mode?
+                  "fa-sun"
+                  "fa-moon")}]]]
+     (cond
+       (not-empty current-project-data)
+       [:div
+        [:div.mt-10 name]
+        [:div.my-5 (format-time time)]
+        [:div.flex.flex-center
+         [:div.flex.justify-evenly.my-5
+          {:style {:width "40rem"}}
+          [:div.text-5xl.rounded.border.border-gray-300.p-2.cursor-pointer.hover:bg-blue-50.dark:hover:bg-teal-950.dark:border-teal-900
+           {:on-click #(rf/dispatch [:dialogs/open-add-time-dialog])}
+           "Add Time"]
+          [:div.text-5xl.rounded.border.border-gray-300.p-2.cursor-pointer.hover:bg-blue-50.dark:hover:bg-teal-950.dark:border-teal-900
+           {:on-click #(rf/dispatch [::set-counting (not counting)])}
+           (if counting "Stop" "Start")]]]
+        [:div.mt-10 "Piggy Bank:"]
+        [:div.my-5 (format-money (- earned expense-total))]]
 
-      :else
-      [:div.text-6xl
-       [:div "Select Project"]
-       [:div "<---"]])))
+       :else
+       [:div.mt-10
+        [:div "Select a project"]
+        [:div "<---"]])
+     [dialogs/error-dialog]]))
 
 (defn expenses []
   (let [current-expenses @(rf/subscribe [::current-expenses])
-        total-expenses (reduce + (map :cost current-expenses))
+        total-expenses (reduce + (map :f_cost current-expenses))
         current-project @(rf/subscribe [:current-project])
         projects @(rf/subscribe [:projects])
-        hrs (/ (get-in projects [current-project :time]) 3600)
-        rate (get-in projects [current-project :rate])
+        hrs (/ (get-in projects [current-project :i_time]) 3600)
+        rate (get-in projects [current-project :f_rate])
         earned (* rate hrs)]
-    [:div.w-80.border-l.text-xl.flex.flex-col
-     [:div.bg-red-300.text-center.p-1.mb-1.rounded.border-b.border-gray-300
+    [:div.w-80.m-2.flex.flex-col.rounded-lg.bg-white.border.border-gray-300.text-xl.dark:bg-gray-950.dark:border-slate-900
+     [:div.m-2.bg-red-300.text-center.p-1.rounded.border.border-gray-300.dark:bg-purple-900.dark:border-purple-800.dark:hover:bg-purple-800
       {:class (if (some? current-project)
                 "cursor-pointer hover:bg-red-400"
-                "cursor-none")
+                "cursor-not-allowed")
        :on-click #(rf/dispatch [:dialogs/new-expense {}])}
       "Add Expense"]
      [:div.overflow-auto.m-1
@@ -239,21 +249,21 @@
         (not-empty current-expenses)
         (map-indexed (fn [idx expense]
                        ^{:key idx}
-                       [:div.p-1.mb-1.flex.group.hover:bg-blue-50.rounded
-                        [:div (:name expense)]
+                       [:div.py-1.px-2.mb-1.flex.group.hover:bg-blue-50.rounded.dark:hover:bg-indigo-950
+                        [:div (:t_name expense)]
                         [:div.flex-grow]
                         [:div.hidden.group-hover:flex
-                         [:div.px-2.mx-1.rounded.hover:bg-red-200.cursor-pointer
-                          {:on-click #(rf/dispatch [::delete-expense idx])}
+                         [:div.px-2.mx-1.rounded.hover:bg-red-200.cursor-pointer.dark:hover:bg-red-900
+                          {:on-click #(rf/dispatch [:user/delete-db-expense (:id expense)])}
                           [:i.fas.fa-trash]]]
-                        [:div (format-money (:cost expense))]])
+                        [:div (format-money (:f_cost expense))]])
                      current-expenses)
 
         :else
         [:div "No expenses yet"])]
      [:div.flex-grow]
      (when (and (some? current-project) (not-empty current-expenses))
-       [:div.border-t
+       [:div.border-t.p-2.border-gray-300.dark:border-slate-900
         [:div.p-2
          [:div.flex
           [:div "Total earned"]
@@ -270,7 +280,7 @@
          [:div (format-money (- earned total-expenses))]]])]))
 
 (defn main []
-  [:div.flex.justify-between.min-h-full.relative.font-serif
+  [:div.flex.justify-between.min-h-full.relative.font-serif.bg-gray-100.dark:bg-black.dark:text-gray-300
    {:style {:height "100vh"}}
    [project-list]
    [project]
@@ -279,15 +289,15 @@
    [dialogs/edit-project-dialog]
    [dialogs/add-expense-dialog]
    [dialogs/add-time-dialog]
-   ])
+   [dialogs/sign-in-dialog]])
 
 (defn start []
   (rdom/render [main]
                (. js/document (getElementById "app"))))
 
 (defn ^:export init []
-  (js/setInterval #(when @(rf/subscribe [::counting?])
-                     (rf/dispatch [::inc-time])) 1000)
+  (js/setInterval #(rf/dispatch [::inc-time]) 1000)
+  (rf/dispatch [::init-dark-mode])
   ;; init is called ONCE when the page loads
   ;; this is called in the index.html and must be exported
   ;; so it is available even in :advanced release builds
@@ -296,4 +306,4 @@
 (defn stop []
   ;; stop is called before any code is reloaded
   ;; this is controlled by :before-load in the config
-  (js/console.log "stop"))
+  )

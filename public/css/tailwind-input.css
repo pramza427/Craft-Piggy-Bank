@@ -39,3 +39,50 @@
     widows: 1;
 }
 }
+
+
+/* scrollbar */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Dark scrollbar */
+.dark ::-webkit-scrollbar {
+    width: 10px;
+}
+
+.dark ::-webkit-scrollbar-track {
+    background: #888;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 5px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Remove arrows on number input */
+.remove-arrow::-webkit-inner-spin-button,
+.remove-arrow::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.remove-arrow {
+    -moz-appearance: textfield;
+}
