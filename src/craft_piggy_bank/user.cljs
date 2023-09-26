@@ -13,6 +13,7 @@
   ::remove-error
   (fn [db _]
     (dissoc db :error)))
+
 (rf/reg-event-fx
   ::set-error
   (fn [{:keys [db]} [_ val]]
@@ -74,14 +75,14 @@
         :else
         (do
           (.then (-> supabase
-                    (.from "projects")
-                    (.insert (clj->js [{"t_name" t_name "i_time" time "f_rate" f_rate "b_add_expenses" b_add_expenses}]))
-                    (.select))
-                (fn [result]
-                  (let [keyed-result (keywordize-keys (js->clj result))]
-                    (if (:error keyed-result)
-                      (rf/dispatch [::set-error (:error keyed-result)])
-                      (rf/dispatch [::add-project-local (into {} (:data keyed-result))])))))
+                     (.from "projects")
+                     (.insert (clj->js [{"t_name" t_name "i_time" time "f_rate" f_rate "b_add_expenses" b_add_expenses}]))
+                     (.select))
+                 (fn [result]
+                   (let [keyed-result (keywordize-keys (js->clj result))]
+                     (if (:error keyed-result)
+                       (rf/dispatch [::set-error (:error keyed-result)])
+                       (rf/dispatch [::add-project-local (into {} (:data keyed-result))])))))
           (assoc db :loading? true))))))
 
 (rf/reg-event-db
@@ -148,16 +149,16 @@
 
       :else
       (do
-       (.then (-> supabase
-                  (.from "expenses")
-                  (.insert (clj->js [{"t_name" t_name "f_cost" f_cost "r_user" (get-in db [:user :id]) "r_project" (:current-project db)}]))
-                  (.select))
-              (fn [result]
-                (let [keyed-result (keywordize-keys (js->clj result))]
-                  (if (:error keyed-result)
-                    (rf/dispatch [::set-error (:error keyed-result)])
-                    (rf/dispatch [::add-expense-local (into {} (:data keyed-result))])))))
-       (assoc db :loading? true)))))
+        (.then (-> supabase
+                   (.from "expenses")
+                   (.insert (clj->js [{"t_name" t_name "f_cost" f_cost "r_user" (get-in db [:user :id]) "r_project" (:current-project db)}]))
+                   (.select))
+               (fn [result]
+                 (let [keyed-result (keywordize-keys (js->clj result))]
+                   (if (:error keyed-result)
+                     (rf/dispatch [::set-error (:error keyed-result)])
+                     (rf/dispatch [::add-expense-local (into {} (:data keyed-result))])))))
+        (assoc db :loading? true)))))
 
 (rf/reg-event-db
   ::delete-expense-local
@@ -207,13 +208,67 @@
                   (.update #js{:t_name (:t_name updated-project) :f_rate (:f_rate updated-project)
                                :i_time (:i_time updated-project) :b_add_expenses (:b_add_expenses updated-project)})
                   (.eq "id" (:id project-edits)))]
-      (.then ret
-             (fn [result]
-               (let [keyed-result (keywordize-keys (js->clj result))]
-                 (if (:error keyed-result)
-                   (rf/dispatch [::set-error (:error keyed-result)])
-                   (rf/dispatch [::update-project-local updated-project])))))
-      (assoc db :loading? true))))
+      (cond
+        (empty? (:user db))
+        (assoc-in db [:projects (:id updated-project)] updated-project)
+
+        :else
+        (do
+          (.then ret
+                 (fn [result]
+                   (let [keyed-result (keywordize-keys (js->clj result))]
+                     (if (:error keyed-result)
+                       (rf/dispatch [::set-error (:error keyed-result)])
+                       (rf/dispatch [::update-project-local updated-project])))))
+          (assoc db :loading? true))))))
+
+(rf/reg-event-db
+  ::add-time-local
+  (fn [db [_ time project-id]]
+    (assoc-in db [:projects project-id :i_time] time)))
+
+(rf/reg-event-db
+  :user/add-db-time
+  (fn [db [_ time project-id]]
+    (let [time-combined (+
+                          (* 3600 (:hours time))
+                          (* 60 (:minutes time))
+                          (:seconds time))
+          current-time (get-in db [:projects (get db :current-project) :i_time])
+          total-time (+ time-combined current-time)]
+      (cond
+        (empty? (:user db))
+        (assoc-in db [:projects project-id :i_time] total-time)
+
+        :else
+        (do
+          (.then (-> supabase
+                     (.from "projects")
+                     (.update #js{:i_time total-time})
+                     (.eq "id" project-id))
+                 (fn [result]
+                   (let [keyed-result (keywordize-keys (js->clj result))]
+                     (if (:error keyed-result)
+                       (rf/dispatch [::set-error (:error keyed-result)])
+                       (rf/dispatch [::add-time-local total-time project-id])))))
+          (assoc db :loading? true))))))
+
+(rf/reg-event-db
+  :user/update-db-time
+  (fn [db _]
+    (when (not-empty (:user db))
+      (let [project-id (:current-project db)
+            time (get-in db [:projects project-id :i_time])]
+        (.then (-> supabase
+                   (.from "projects")
+                   (.update #js{:i_time time})
+                   (.eq "id" project-id))
+               (fn [result]
+                 (let [keyed-result (keywordize-keys (js->clj result))]
+                   (if (:error keyed-result)
+                     (rf/dispatch [::set-error (:error keyed-result)])
+                     (rf/dispatch [::set-success "Time added to DB"])))))
+        (assoc db :loading? false)))))
 
 (defn sign-in [resp]
   (if (and (get-in resp [:data :user :confirmation_sent_at])

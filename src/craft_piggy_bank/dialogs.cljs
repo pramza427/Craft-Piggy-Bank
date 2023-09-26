@@ -101,7 +101,7 @@
           seconds (mod time 60)
           minutes (mod (Math/floor (/ time 60)) 60)
           hours (Math/floor (/ time 3600))]
-     (assoc db ::project-edits (merge project {:hours hours :minutes minutes :seconds seconds})))))
+      (assoc db ::project-edits (merge project {:hours hours :minutes minutes :seconds seconds})))))
 
 (rf/reg-event-db
   ::close-edit-project-dialog
@@ -117,57 +117,57 @@
   (let [show? @(rf/subscribe [::project-edits])]
     (when show?
       (let [project-edits @(rf/subscribe [::project-edits])]
-        [:div.bg-gray-800.bg-opacity-50.absolute.top-0.left-0.flex.flex-center.text-3xl
+        [:div.bg-gray-800.bg-opacity-50.absolute.top-0.left-0.flex.flex-center.text-3xl.dark:bg-gray-950.dark:bg-opacity-50
          {:style {:width "100vw" :height "100vh"}
           :on-click #(rf/dispatch [::close-edit-project-dialog])}
-         [:div.bg-white.border.border-gray-300.rounded-lg.relative.p-5
+         [:div.bg-white.border.border-gray-300.rounded-lg.relative.p-5.dark:bg-stone-950.dark:border-stone-800
           {:style {:width "30rem"}
            :on-click (fn [e] (.stopPropagation e))}
           [:div.text-center.mb-5 (str "Editing " (:t_name project-edits))]
-          [:input.py-2.w-full.bg-gray-100.text-xl.text-center.rounded-lg.border.border-gray-300.mb-5
+          [:input.focus:outline-none.py-2.w-full.bg-gray-100.text-xl.text-center.rounded-lg.border.border-gray-300.mb-5.dark:bg-stone-900.dark:border-stone-800.dark:focus:border-stone-600
            {:type "text"
             :placeholder "Project Name"
             :value (or (:t_name project-edits) "Project")
             :on-change #(rf/dispatch [::set-project-edits :t_name (-> % .-target .-value)])
             :on-focus #(-> % .-target .select)}]
-          [:input.py-2.w-full.bg-gray-100.text-xl.text-center.rounded-lg.border.border-gray-300.mb-5
+          [:input.focus:outline-none.remove-arrow.py-2.w-full.bg-gray-100.text-xl.text-center.rounded-lg.border.border-gray-300.mb-5.dark:bg-stone-900.dark:border-stone-800.dark:focus:border-stone-600
            {:type "number"
             :placeholder "Hourly Rate"
             :value (:f_rate project-edits)
             :on-change #(rf/dispatch [::set-project-edits :f_rate (-> % .-target .-value js/parseFloat)])}]
           [:div "Time already clocked in:"]
           [:div.flex.justify-center
-           [:input.py-2.w-24.bg-gray-100.text-xl.text-center.rounded-lg.border.border-gray-300.mb-5
+           [:input.focus:outline-none.remove-arrow.py-2.w-24.bg-gray-100.text-xl.text-center.rounded-lg.border.border-gray-300.mb-5.dark:bg-stone-900.dark:border-stone-800.dark:focus:border-stone-600
             {:type "number"
              :placeholder "Hours"
              :value (:hours project-edits)
              :on-change #(rf/dispatch [::set-project-edits :hours (-> % .-target .-value js/parseInt)])}]
            [:div ":"]
-           [:input.py-2.w-24.bg-gray-100.text-xl.text-center.rounded-lg.border.border-gray-300.mb-5
+           [:input.focus:outline-none.remove-arrow.py-2.w-24.bg-gray-100.text-xl.text-center.rounded-lg.border.border-gray-300.mb-5.dark:bg-stone-900.dark:border-stone-800.dark:focus:border-stone-600
             {:type "number"
              :placeholder "Minutes"
              :value (:minutes project-edits)
              :on-change #(rf/dispatch [::set-project-edits :minutes (-> % .-target .-value js/parseInt)])}]
            [:div ":"]
-           [:input.py-2.w-24.bg-gray-100.text-xl.text-center.rounded-lg.border.border-gray-300.mb-5
+           [:input.focus:outline-none.remove-arrow.py-2.w-24.bg-gray-100.text-xl.text-center.rounded-lg.border.border-gray-300.mb-5.dark:bg-stone-900.dark:border-stone-800.dark:focus:border-stone-600
             {:type "number"
              :placeholder "Seconds"
              :value (:seconds project-edits)
              :on-change #(rf/dispatch [::set-project-edits :seconds (-> % .-target .-value js/parseInt)])}]]
           [:div.w-full.flex.justify-between
            [:div "Add expenses?"]
-           [:input.w-10.h-10.border.mx-5.rounded-lg.mb-3
+           [:input.focus:outline-none.w-10.h-10.border.mx-5.rounded-lg.mb-5.cursor-pointer
             {:type "button"
              :class (if (:b_add_expenses project-edits)
-                      "bg-blue-300 border-blue-500"
-                      "hover:bg-blue-100 hover:border-blue-300 bg-gray-100 border-gray-300")
-             :on-click #(rf/dispatch [::set-new-project :b_add_expenses (not (:b_add_expenses project-edits))])}]]
+                      "bg-blue-300 border-blue-500 dark:bg-blue-950 dark:border-blue-800"
+                      "hover:bg-blue-100 hover:border-blue-300 bg-gray-100 border-gray-300 dark:bg-stone-900 dark:border-stone-800")
+             :on-click #(rf/dispatch [::set-project-edits :b_add_expenses (not (:b_add_expenses project-edits))])}]]
           [:div.w-full.flex
-           [:div.flex-grow]
            [:div.p-3.cursor-pointer.hover:bg-gray-100.rounded-lg.dark:hover:bg-stone-800
             {:on-click #(rf/dispatch [::close-edit-project-dialog])}
             "Cancel"]
-           [:div.p-2.cursor-pointer.text-center.rounded-lg.hover:bg-green-500
+           [:div.flex-grow]
+           [:div.p-3.cursor-pointer.text-center.rounded-lg.hover:bg-green-500.dark:hover:bg-teal-900
             {:on-click (fn []
                          (rf/dispatch [:user/update-db-project project-edits])
                          (rf/dispatch [::close-edit-project-dialog]))}
@@ -183,7 +183,7 @@
   :dialogs/new-expense
   (fn [db [_ val]]
     (when (some? (get db :current-project))
-     (assoc db ::new-expense val))))
+      (assoc db ::new-expense val))))
 
 (rf/reg-event-db
   ::set-expense-edits
@@ -247,21 +247,6 @@
   (fn [db _]
     (dissoc db ::add-time)))
 
-(rf/reg-event-db
-  ::add-time
-  (fn [db _]
-    (let [time (get db ::add-time)
-          time-combined (+
-                          (* 3600 (:hours time))
-                          (* 60 (:minutes time))
-                          (:seconds time))
-          current-time (get-in db [:projects (get db :current-project) :i_time])]
-      (-> db
-          (assoc-in [:projects (get db :current-project) :i_time] (+ current-time time-combined))
-          (dissoc db ::add-time)))))
-
-
-
 (defn add-time-dialog []
   (let [add-time @(rf/subscribe [::add-time])
         current-project @(rf/subscribe [:current-project-data])]
@@ -297,7 +282,9 @@
           "Cancel"]
          [:div.flex-grow]
          [:div.p-3.cursor-pointer.text-center.rounded-lg.hover:bg-green-500.dark:hover:bg-teal-900
-          {:on-click #(rf/dispatch [::add-time])}
+          {:on-click (fn []
+                       (rf/dispatch [:user/add-db-time add-time (:id current-project)])
+                       (rf/dispatch [::close-add-time-dialog]))}
           "Add"]]]])))
 
 ;; ------------------------ Sign In Dialoge

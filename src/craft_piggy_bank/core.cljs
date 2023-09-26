@@ -99,10 +99,13 @@
       (let [current-project (get db :current-project)]
         (assoc-in db [:projects current-project :i_time] (inc (get-in db [:projects current-project :i_time])))))))
 
-(rf/reg-event-db
+(rf/reg-event-fx
   ::set-counting
-  (fn [db [_ val]]
-    (assoc db ::counting? val)))
+  (fn [{:keys [db]} [_ val]]
+    (if val
+      {:db (assoc db ::counting? val)}
+      {:db (assoc db ::counting? val)
+       :dispatch [:user/update-db-time]})))
 
 (rf/reg-event-db
   ::set-current-project
