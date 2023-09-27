@@ -62,6 +62,11 @@
     (get db ::dark-mode)))
 
 (rf/reg-sub
+  ::get-loading?
+  (fn [db _]
+    (get db :loading?)))
+
+(rf/reg-sub
   :current-project
   (fn [db _]
     (get db :current-project)))
@@ -147,8 +152,7 @@
          "Save to local"]
         [:div.p-1.cursor-pointer.hover:bg-blue-50.text-center.rounded.dark:hover:bg-teal-950
          {:on-click #(rf/dispatch [::load-from-local])}
-         "Load from local"]])
-     ]))
+         "Load from local"]])]))
 
 (defn project-list-item [project]
   (let [current-project @(rf/subscribe [:current-project])]
@@ -197,7 +201,8 @@
         counting @(rf/subscribe [::counting?])
         current-expenses @(rf/subscribe [::current-expenses])
         expense-total (reduce + (map :f_cost current-expenses))
-        dark-mode? @(rf/subscribe [::dark-mode?])]
+        dark-mode? @(rf/subscribe [::dark-mode?])
+        loading? @(rf/subscribe [::get-loading?])]
     [:div.flex.flex-col.flex-grow.text-6xl.text-center.relative.border.m-2.rounded-lg.bg-white.dark:bg-slate-950.dark:border-slate-800
      [:div.absolute.top-5.right-5.cursor-pointer.text-xl
       {:on-click #(rf/dispatch [::toggle-dark-mode])}
@@ -227,7 +232,10 @@
        [:div.mt-10
         [:div "Select a project"]
         [:div "<---"]])
-     [dialogs/error-dialog]]))
+     [dialogs/error-dialog]
+     (when loading?
+       [:div.flex.flex-center
+        [:i.fas.fa-spinner.fa-pulse]])]))
 
 (defn expenses []
   (let [current-expenses @(rf/subscribe [::current-expenses])

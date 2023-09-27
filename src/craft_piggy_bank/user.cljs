@@ -116,7 +116,8 @@
   (fn [db [_ project-id]]
     (-> db
         (update :projects dissoc project-id)
-        (dissoc :current-project))))
+        (dissoc :current-project)
+        (assoc :loading? false))))
 
 (rf/reg-event-db
   :user/delete-db-project
@@ -125,13 +126,20 @@
                   (.from "projects")
                   (.delete)
                   (.eq "id" project-id))]
-      (.then ret
-             (fn [result]
-               (let [keyed-result (keywordize-keys (js->clj result))]
-                 (if (:error keyed-result)
-                   (rf/dispatch [::set-error (:error keyed-result)])
-                   (rf/dispatch [::delete-project-local project-id])))))
-      (assoc db :loading? true))))
+      (cond
+        (empty? (:user db))
+        (-> db
+            (update :projects dissoc project-id)
+            (dissoc :current-project))
+
+        :else
+        (do (.then ret
+                   (fn [result]
+                     (let [keyed-result (keywordize-keys (js->clj result))]
+                       (if (:error keyed-result)
+                         (rf/dispatch [::set-error (:error keyed-result)])
+                         (rf/dispatch [::delete-project-local project-id])))))
+            (assoc db :loading? true)) ))))
 
 (rf/reg-event-db
   ::add-expense-local
@@ -165,7 +173,9 @@
   (fn [db [_ expense-id]]
     (let [expenses (into [] (filter (fn [expense] (not= (:id expense) expense-id))
                                     (get-in db [:projects (:current-project db) :expenses])))]
-      (assoc-in db [:projects (get db :current-project) :expenses] expenses))))
+      (-> db
+          (assoc-in [:projects (get db :current-project) :expenses] expenses)
+          (assoc :loading? false)))))
 
 (rf/reg-event-db
   :user/delete-db-expense
@@ -192,7 +202,9 @@
 (rf/reg-event-db
   ::update-project-local
   (fn [db [_ updated-project]]
-    (assoc-in db [:projects (:id updated-project)] updated-project)))
+    (-> db
+        (assoc-in [:projects (:id updated-project)] updated-project)
+        (assoc :loading? false))))
 
 (rf/reg-event-db
   :user/update-db-project
@@ -225,7 +237,9 @@
 (rf/reg-event-db
   ::add-time-local
   (fn [db [_ time project-id]]
-    (assoc-in db [:projects project-id :i_time] time)))
+    (-> db
+        (assoc-in [:projects project-id :i_time] time)
+        (assoc :loading? false))))
 
 (rf/reg-event-db
   :user/add-db-time
